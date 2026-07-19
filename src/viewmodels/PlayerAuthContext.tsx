@@ -43,13 +43,13 @@ export function PlayerAuthProvider({ children }: { children: ReactNode }) {
     setError(null)
     setLoading(true)
     try {
+      const uid = auth.currentUser?.uid ?? (await signInAnonymously(auth)).user.uid
       const found = await findPlayerByAccessCode(gameId, pin)
       if (!found) {
         setError('Code invalide.')
         setLoading(false)
         return false
       }
-      const uid = auth.currentUser?.uid ?? (await signInAnonymously(auth)).user.uid
       if (found.boundUid && found.boundUid !== uid) {
         setError('Ce code est déjà utilisé sur un autre appareil.')
         setLoading(false)
@@ -62,8 +62,10 @@ export function PlayerAuthProvider({ children }: { children: ReactNode }) {
       setStoredPlayerSession(newSession)
       setSession(newSession)
       return true
-    } catch {
-      setError('Une erreur est survenue, réessaie.')
+    } catch (e) {
+      console.error('loginWithPin failed', e)
+      const code = e instanceof Error && 'code' in e ? String((e as { code: unknown }).code) : null
+      setError(code ? `Une erreur est survenue (${code}).` : 'Une erreur est survenue, réessaie.')
       setLoading(false)
       return false
     }

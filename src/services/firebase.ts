@@ -1,5 +1,11 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
+import {
+  browserLocalPersistence,
+  browserSessionPersistence,
+  indexedDBLocalPersistence,
+  inMemoryPersistence,
+  initializeAuth,
+} from 'firebase/auth'
 import type { Auth } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 import type { Firestore } from 'firebase/firestore'
@@ -19,5 +25,16 @@ export const isFirebaseConfigured = Boolean(firebaseConfig.apiKey)
 
 const app = initializeApp(firebaseConfig)
 
-export const auth = isFirebaseConfigured ? getAuth(app) : (null as unknown as Auth)
+// Private browsing / restrictive browser profiles can block IndexedDB, which getAuth()'s
+// default persistence needs — falling back down this list keeps sign-in working regardless.
+export const auth = isFirebaseConfigured
+  ? initializeAuth(app, {
+      persistence: [
+        indexedDBLocalPersistence,
+        browserLocalPersistence,
+        browserSessionPersistence,
+        inMemoryPersistence,
+      ],
+    })
+  : (null as unknown as Auth)
 export const db = isFirebaseConfigured ? getFirestore(app) : (null as unknown as Firestore)

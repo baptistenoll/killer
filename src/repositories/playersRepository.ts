@@ -94,6 +94,11 @@ export async function bindPlayerToUid(
   await updateDoc(doc(db, 'games', gameId, 'players', playerId), { boundUid: uid })
 }
 
+/** Admin action: unbinds a player's PIN from its device, letting them log in from a new one. */
+export async function unbindPlayer(gameId: string, playerId: string): Promise<void> {
+  await updateDoc(doc(db, 'games', gameId, 'players', playerId), { boundUid: null })
+}
+
 export async function getPlayers(gameId: string): Promise<Player[]> {
   const snap = await getDocs(playersCollection(gameId))
   return snap.docs.map(toPlayer)

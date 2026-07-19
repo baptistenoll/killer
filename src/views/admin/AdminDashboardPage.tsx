@@ -25,6 +25,7 @@ export function AdminDashboardPage({ gameId }: AdminDashboardPageProps) {
     repairMissions,
     assignTarget,
     uploadPhoto,
+    resetDevice,
     killPlayer,
     revivePlayer,
     startGame,
@@ -89,6 +90,7 @@ export function AdminDashboardPage({ gameId }: AdminDashboardPageProps) {
           onAssignMission={assignMission}
           onAssignTarget={assignTarget}
           onUploadPhoto={uploadPhoto}
+          onResetDevice={resetDevice}
           onKillPlayer={killPlayer}
           onRevivePlayer={revivePlayer}
         />
@@ -167,6 +169,7 @@ function PlayersSection({
   onAssignMission,
   onAssignTarget,
   onUploadPhoto,
+  onResetDevice,
   onKillPlayer,
   onRevivePlayer,
 }: {
@@ -178,6 +181,7 @@ function PlayersSection({
   onAssignMission: (playerId: string, missionId: string | null) => void
   onAssignTarget: (playerId: string, targetId: string | null) => void
   onUploadPhoto: (playerId: string, file: File) => void
+  onResetDevice: (playerId: string) => void
   onKillPlayer: (playerId: string) => void
   onRevivePlayer: (playerId: string) => void
 }) {
@@ -299,23 +303,34 @@ function PlayersSection({
                 </td>
                 <td className="px-4 py-2">{p.score}</td>
                 <td className="px-4 py-2">
-                  {p.status === 'alive' ? (
-                    <button
-                      type="button"
-                      onClick={() => onKillPlayer(p.id)}
-                      className="rounded-md bg-red-900 px-3 py-1.5 text-sm font-medium text-red-200"
-                    >
-                      Tuer
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => onRevivePlayer(p.id)}
-                      className="rounded-md bg-green-900 px-3 py-1.5 text-sm font-medium text-green-200"
-                    >
-                      Ressusciter
-                    </button>
-                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {p.status === 'alive' ? (
+                      <button
+                        type="button"
+                        onClick={() => onKillPlayer(p.id)}
+                        className="rounded-md bg-red-900 px-3 py-1.5 text-sm font-medium text-red-200"
+                      >
+                        Tuer
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onRevivePlayer(p.id)}
+                        className="rounded-md bg-green-900 px-3 py-1.5 text-sm font-medium text-green-200"
+                      >
+                        Ressusciter
+                      </button>
+                    )}
+                    {p.boundUid && (
+                      <button
+                        type="button"
+                        onClick={() => onResetDevice(p.id)}
+                        className="rounded-md bg-slate-700 px-3 py-1.5 text-sm font-medium"
+                      >
+                        Réinitialiser l'appareil
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
               )

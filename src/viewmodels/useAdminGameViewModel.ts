@@ -7,6 +7,7 @@ import {
   setPlayerPhoto,
   setPlayerTarget,
   subscribePlayers,
+  unbindPlayer,
 } from '../repositories/playersRepository'
 import { addMission as addMissionDoc, subscribeMissions } from '../repositories/missionsRepository'
 import { subscribePendingClaims } from '../repositories/killClaimsRepository'
@@ -117,6 +118,15 @@ export function useAdminGameViewModel(gameId: string) {
     }
   }
 
+  async function resetDevice(playerId: string) {
+    setError(null)
+    try {
+      await unbindPlayer(gameId, playerId)
+    } catch {
+      setError("Impossible de réinitialiser l'appareil de ce joueur.")
+    }
+  }
+
   async function killPlayer(playerId: string) {
     setError(null)
     try {
@@ -187,6 +197,7 @@ export function useAdminGameViewModel(gameId: string) {
     repairMissions,
     assignTarget,
     uploadPhoto,
+    resetDevice,
     killPlayer,
     revivePlayer,
     startGame: handleStartGame,
