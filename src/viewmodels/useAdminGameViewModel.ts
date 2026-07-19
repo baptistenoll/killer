@@ -11,11 +11,14 @@ import {
 import { addMission as addMissionDoc, subscribeMissions } from '../repositories/missionsRepository'
 import { subscribePendingClaims } from '../repositories/killClaimsRepository'
 import {
+  adminKillPlayer,
   approveKillClaim,
   assignMissionToPlayer,
   deleteMission as deleteMissionDoc,
   endGame,
   rejectKillClaim,
+  repairOrphanedMissions,
+  resurrectPlayer,
   startGame,
   updateMissionText as updateMissionTextDoc,
 } from '../services/gameEngine'
@@ -27,6 +30,7 @@ export function useAdminGameViewModel(gameId: string) {
   const [missions, setMissions] = useState<Mission[]>([])
   const [pendingClaims, setPendingClaims] = useState<KillClaim[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
 
   useEffect(() => subscribeGame(gameId, setGame), [gameId])
   useEffect(() => subscribePlayers(gameId, setPlayers), [gameId])
@@ -76,12 +80,21 @@ export function useAdminGameViewModel(gameId: string) {
 
   async function assignMission(playerId: string, missionId: string | null) {
     setError(null)
-    const player = players.find((p) => p.id === playerId)
-    if (!player) return
     try {
-      await assignMissionToPlayer(gameId, playerId, player.missionId, missionId)
+      await assignMissionToPlayer(gameId, playerId, missionId)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Impossible d'attribuer cette mission.")
+    }
+  }
+
+  async function repairMissions() {
+    setError(null)
+    setInfo(null)
+    try {
+      const count = await repairOrphanedMissions(gameId)
+      setInfo(count > 0 ? `${count} mission(s) débloquée(s).` : 'Aucune mission bloquée trouvée.')
+    } catch {
+      setError('Impossible de réparer les missions.')
     }
   }
 
@@ -101,6 +114,24 @@ export function useAdminGameViewModel(gameId: string) {
       await setPlayerPhoto(gameId, playerId, dataUrl)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Impossible d'envoyer cette photo.")
+    }
+  }
+
+  async function killPlayer(playerId: string) {
+    setError(null)
+    try {
+      await adminKillPlayer(gameId, playerId)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Impossible de tuer ce joueur.')
+    }
+  }
+
+  async function revivePlayer(playerId: string) {
+    setError(null)
+    try {
+      await resurrectPlayer(gameId, playerId)
+    } catch {
+      setError('Impossible de ressusciter ce joueur.')
     }
   }
 
@@ -147,13 +178,17 @@ export function useAdminGameViewModel(gameId: string) {
     missions,
     pendingClaims,
     error,
+    info,
     addPlayer,
     addMissionText,
     updateMissionText,
     deleteMission,
     assignMission,
+    repairMissions,
     assignTarget,
     uploadPhoto,
+    killPlayer,
+    revivePlayer,
     startGame: handleStartGame,
     endGame: handleEndGame,
     approveClaim,

@@ -1,10 +1,10 @@
 # Killer
 
-Application web pour organiser une partie de **Killer** (jeu de l'assassin) : chaque joueur reçoit une cible et une mission à accomplir sur elle. Quand il y arrive, il envoie une demande de validation à l'admin ; une fois validée, il hérite automatiquement de la cible et de la mission de sa victime. Dernier joueur en vie, il gagne.
+Application web pour organiser une partie de **Killer** (jeu de l'assassin) : chaque joueur reçoit une cible et une mission à accomplir sur elle. L'admin attribue manuellement la cible et la mission de départ de chaque joueur. Une fois la partie lancée, quand un joueur accomplit sa mission, il envoie une demande de validation à l'admin ; une fois validée, il hérite automatiquement de la cible et de la mission exacte de sa victime. Dernier joueur en vie, il gagne (ou l'admin peut terminer la partie à tout moment).
 
 Deux interfaces :
-- **Admin** — crée la partie, gère les joueurs, attribue cibles/missions, valide les kills.
-- **Joueur** — accède via un code à 4 chiffres, voit sa cible, sa mission, son score, et signale ses kills.
+- **Admin** — crée la partie, gère les joueurs (photo, cible, mission), gère le pool de missions, valide/rejette les kills, peut éliminer ou ressusciter un joueur directement.
+- **Joueur** — accède via un code à 4 chiffres, voit sa cible (avec photo), sa mission, son score, et signale ses kills.
 
 ## Stack technique
 
@@ -13,7 +13,7 @@ Deux interfaces :
 - [React Router](https://reactrouter.com/) pour le routing
 - [Firebase](https://firebase.google.com/) — Firestore (données) + Authentication (admin par email/mot de passe, joueurs par code PIN via l'auth anonyme)
 
-Les photos de joueurs sont stockées directement en base64 dans Firestore (pas de Firebase Storage, pour rester sur le forfait gratuit Spark).
+Les photos de joueurs sont stockées directement en base64 dans Firestore (pas de Firebase Storage, pour rester sur le forfait gratuit Spark — Storage nécessite le forfait payant Blaze).
 
 ## Architecture (MVVM)
 
@@ -50,6 +50,8 @@ Sur [console.firebase.google.com](https://console.firebase.google.com), crée un
 ### 3. Activer Firestore
 **Build → Firestore Database → Créer une base de données**, démarrer en **mode production**.
 
+Ne pas activer Cloud Storage : il nécessite le forfait Blaze, et ce projet ne l'utilise pas (photos stockées en base64 dans Firestore).
+
 ### 4. Variables d'environnement
 Copie `.env.example` vers `.env` et renseigne les 6 valeurs issues de la config de ton app web Firebase :
 
@@ -65,7 +67,7 @@ VITE_FIREBASE_APP_ID=
 Sans ces valeurs, l'app démarre quand même (bandeau d'avertissement affiché) mais aucune fonctionnalité liée à Firebase ne marche.
 
 ### 5. Déployer les règles de sécurité Firestore
-Le fichier `firestore.rules` à la racine définit les permissions (lecture ouverte aux connectés, écriture admin sauf exceptions ciblées pour les joueurs). À déployer via la CLI :
+Le fichier `firestore.rules` à la racine définit les permissions (lecture ouverte aux connectés, écriture/suppression admin sauf exceptions ciblées pour les joueurs : liaison PIN, envoi de leur propre kill claim). À redéployer à chaque modification de ce fichier :
 
 ```bash
 npx firebase-tools login
@@ -88,16 +90,21 @@ npm run build     # build de production
 npm run lint      # oxlint
 ```
 
+## Déploiement (Vercel)
+
+Le fichier `vercel.json` à la racine redirige toutes les routes vers `index.html`, nécessaire pour que le routing côté client (React Router) fonctionne sur des URL comme `/play/<gameId>` — sans lui, Vercel renvoie un 404 sur toute route qui n'est pas un vrai fichier. Penser à configurer les variables d'environnement (`VITE_FIREBASE_*`) dans les paramètres du projet Vercel.
+
 ## Utilisation
 
 ### Côté admin
 1. Connexion sur `/admin/login`.
-2. `/admin` liste les parties, permet d'en créer ou d'en supprimer.
-3. Dans une partie (`/admin/games/<gameId>`) :
-   - **Joueurs** : ajouter un joueur (génère un code à 4 chiffres), lui attribuer une photo, une cible et une mission (tant que la partie est en `setup`).
-   - **Missions** : créer, modifier, supprimer les missions du pool.
+2. `/admin` liste les parties : en créer une nouvelle, ouvrir une existante, ou la supprimer (supprime aussi tous ses joueurs/missions/kill claims).
+3. Dans une partie (`/admin/games/<gameId>`), lien "← Retour aux parties" pour revenir à la liste :
+   - **Joueurs** : ajouter un joueur (génère un code à 4 chiffres), lui attribuer une photo. Tant qu'il n'a pas encore de cible/mission (en `setup`, ou après une résurrection), des menus déroulants permettent de les choisir manuellement — chaque colonne se verrouille indépendamment dès que sa valeur est définie.
+   - **Tuer / Ressusciter** : bouton par joueur pour l'éliminer directement (celui qui le chassait hérite automatiquement de sa cible/mission, comme une validation normale) ou le remettre en vie (cible/mission à réattribuer ensuite).
+   - **Missions** : créer, modifier (propage au joueur qui la détient), supprimer les missions du pool. Bouton **"Réparer les missions bloquées"** pour débloquer les missions restées marquées à tort comme indisponibles (peut arriver après un enchaînement de kills/résurrections).
    - **Démarrer la partie** : vérifie que chaque joueur a une cible et une mission, puis active la partie.
-   - **Kills à valider** : approuver ou rejeter les demandes des joueurs — approuver transfère automatiquement la cible et la mission de la victime au tueur, incrémente son score, et termine la partie si plus personne à chasser.
+   - **Kills à valider** : approuver ou rejeter les demandes des joueurs — approuver transfère automatiquement la cible et la mission exacte de la victime au tueur, incrémente son score, et termine la partie si plus personne à chasser.
    - **Terminer la partie** : force la fin à tout moment.
 
 ### Côté joueur

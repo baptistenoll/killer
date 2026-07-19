@@ -26,6 +26,26 @@ export async function endGame(gameId: string): Promise<void> {
   await updateDoc(doc(db, 'games', gameId), { status: 'ended' })
 }
 
+/**
+ * Frees any mission left marked "used" whose assignedTo doesn't match a player who
+ * actually still holds it — leftover from kills that predate the fix that keeps this in sync.
+ */
+export async function repairOrphanedMissions(gameId: string): Promise<number> {
+  const [missionsSnap, players] = await Promise.all([
+    getDocs(collection(db, 'games', gameId, 'missions')),
+    getPlayers(gameId),
+  ])
+  const heldMissionIds = new Set(players.filter((p) => p.missionId).map((p) => p.missionId))
+
+  const orphaned = missionsSnap.docs.filter((d) => d.data().used && !heldMissionIds.has(d.id))
+  if (orphaned.length === 0) return 0
+
+  const batch = writeBatch(db)
+  orphaned.forEach((d) => batch.update(d.ref, { used: false, assignedTo: null }))
+  await batch.commit()
+  return orphaned.length
+}
+
 /** Deletes a game along with its players, missions and kill claims subcollections. */
 export async function deleteGame(gameId: string): Promise<void> {
   const subcollections = ['players', 'missions', 'killClaims']
@@ -51,11 +71,14 @@ export async function deleteGame(gameId: string): Promise<void> {
 export async function assignMissionToPlayer(
   gameId: string,
   playerId: string,
-  previousMissionId: string | null,
   missionId: string | null,
 ): Promise<void> {
   await runTransaction(db, async (tx) => {
     const playerRef = doc(db, 'games', gameId, 'players', playerId)
+    const playerSnap = await tx.get(playerRef)
+    if (!playerSnap.exists()) throw new Error('Joueur introuvable.')
+    const previousMissionId: string | null = playerSnap.data().missionId
+
     const previousRef = previousMissionId
       ? doc(db, 'games', gameId, 'missions', previousMissionId)
       : null
@@ -64,7 +87,7 @@ export async function assignMissionToPlayer(
     const newSnap = newRef ? await tx.get(newRef) : null
     if (newRef && !newSnap?.exists()) throw new Error('Mission introuvable.')
 
-    if (previousRef) {
+    if (previousRef && previousMissionId !== missionId) {
       tx.update(previousRef, { used: false, assignedTo: null })
     }
     if (newRef) {
@@ -139,15 +162,78 @@ export async function approveKillClaim(gameId: string, claimId: string): Promise
 
     tx.update(killerRef, {
       targetId: isWinner ? null : inheritedTargetId,
-      missionId: isWinner ? null : victim.missionId,
+      missionId: null,
       missionText: isWinner ? null : victim.missionText,
       score: (killer.score ?? 0) + 1,
     })
     tx.update(victimRef, { status: 'eliminated', targetId: null, missionId: null, missionText: null })
+    if (killer.missionId) {
+      tx.update(doc(db, 'games', gameId, 'missions', killer.missionId), { used: false, assignedTo: null })
+    }
+    if (victim.missionId) {
+      tx.update(doc(db, 'games', gameId, 'missions', victim.missionId), { used: false, assignedTo: null })
+    }
     tx.update(claimRef, { status: 'approved', reviewedAt: Date.now() })
     if (isWinner) {
       tx.update(doc(db, 'games', gameId), { status: 'ended' })
     }
+  })
+}
+
+/**
+ * Admin override: eliminates a player directly, without going through a kill claim.
+ * Whoever was hunting this player (if anyone) inherits their target and mission,
+ * exactly as if that kill had been validated normally.
+ */
+export async function adminKillPlayer(gameId: string, playerId: string): Promise<void> {
+  const players = await getPlayers(gameId)
+  const killer = players.find((p) => p.targetId === playerId) ?? null
+
+  await runTransaction(db, async (tx) => {
+    const victimRef = doc(db, 'games', gameId, 'players', playerId)
+    const victimSnap = await tx.get(victimRef)
+    if (!victimSnap.exists()) throw new Error('Joueur introuvable.')
+    const victim = victimSnap.data()
+
+    if (killer) {
+      const killerRef = doc(db, 'games', gameId, 'players', killer.id)
+      const killerSnap = await tx.get(killerRef)
+      const killerData = killerSnap.data()
+      if (killerData) {
+        const inheritedTargetId: string | null = victim.targetId
+        const isWinner = inheritedTargetId === null || inheritedTargetId === killer.id
+        tx.update(killerRef, {
+          targetId: isWinner ? null : inheritedTargetId,
+          missionId: null,
+          missionText: isWinner ? null : victim.missionText,
+          score: (killerData.score ?? 0) + 1,
+        })
+        if (killerData.missionId) {
+          tx.update(doc(db, 'games', gameId, 'missions', killerData.missionId), {
+            used: false,
+            assignedTo: null,
+          })
+        }
+        if (isWinner) {
+          tx.update(doc(db, 'games', gameId), { status: 'ended' })
+        }
+      }
+    }
+
+    tx.update(victimRef, { status: 'eliminated', targetId: null, missionId: null, missionText: null })
+    if (victim.missionId) {
+      tx.update(doc(db, 'games', gameId, 'missions', victim.missionId), { used: false, assignedTo: null })
+    }
+  })
+}
+
+/** Brings a player back into the game; admin must reassign a target and mission afterward. */
+export async function resurrectPlayer(gameId: string, playerId: string): Promise<void> {
+  await updateDoc(doc(db, 'games', gameId, 'players', playerId), {
+    status: 'alive',
+    targetId: null,
+    missionId: null,
+    missionText: null,
   })
 }
 

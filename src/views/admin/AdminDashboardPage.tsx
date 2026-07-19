@@ -16,13 +16,17 @@ export function AdminDashboardPage({ gameId }: AdminDashboardPageProps) {
     missions,
     pendingClaims,
     error,
+    info,
     addPlayer,
     addMissionText,
     updateMissionText,
     deleteMission,
     assignMission,
+    repairMissions,
     assignTarget,
     uploadPhoto,
+    killPlayer,
+    revivePlayer,
     startGame,
     endGame,
     approveClaim,
@@ -67,6 +71,7 @@ export function AdminDashboardPage({ gameId }: AdminDashboardPageProps) {
         </header>
 
         {error && <p className="rounded-md bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>}
+        {info && <p className="rounded-md bg-slate-800 px-3 py-2 text-sm text-slate-300">{info}</p>}
 
         <PendingClaimsSection
           claims={pendingClaims}
@@ -84,6 +89,8 @@ export function AdminDashboardPage({ gameId }: AdminDashboardPageProps) {
           onAssignMission={assignMission}
           onAssignTarget={assignTarget}
           onUploadPhoto={uploadPhoto}
+          onKillPlayer={killPlayer}
+          onRevivePlayer={revivePlayer}
         />
 
         <MissionsSection
@@ -92,6 +99,7 @@ export function AdminDashboardPage({ gameId }: AdminDashboardPageProps) {
           onAddMission={addMissionText}
           onUpdateMission={updateMissionText}
           onDeleteMission={deleteMission}
+          onRepairMissions={repairMissions}
         />
       </div>
     </div>
@@ -159,6 +167,8 @@ function PlayersSection({
   onAssignMission,
   onAssignTarget,
   onUploadPhoto,
+  onKillPlayer,
+  onRevivePlayer,
 }: {
   players: Player[]
   playersById: Map<string, Player>
@@ -168,6 +178,8 @@ function PlayersSection({
   onAssignMission: (playerId: string, missionId: string | null) => void
   onAssignTarget: (playerId: string, targetId: string | null) => void
   onUploadPhoto: (playerId: string, file: File) => void
+  onKillPlayer: (playerId: string) => void
+  onRevivePlayer: (playerId: string) => void
 }) {
   const [name, setName] = useState('')
 
@@ -203,10 +215,14 @@ function PlayersSection({
               <th className="px-4 py-2">Cible</th>
               <th className="px-4 py-2">Mission</th>
               <th className="px-4 py-2">Score</th>
+              <th className="px-4 py-2">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800">
-            {players.map((p) => (
+            {players.map((p) => {
+              const targetEditable = gameStatus === 'setup' || (p.status === 'alive' && !p.targetId)
+              const missionEditable = gameStatus === 'setup' || (p.status === 'alive' && !p.missionText)
+              return (
               <tr key={p.id}>
                 <td className="px-4 py-2">
                   <label className="flex cursor-pointer items-center gap-2">
@@ -237,7 +253,7 @@ function PlayersSection({
                 <td className="px-4 py-2 font-mono">{p.accessCode}</td>
                 <td className="px-4 py-2">{p.status === 'alive' ? 'Vivant' : 'Éliminé'}</td>
                 <td className="px-4 py-2">
-                  {gameStatus === 'setup' ? (
+                  {targetEditable ? (
                     <select
                       value={p.targetId ?? ''}
                       onChange={(e) => onAssignTarget(p.id, e.target.value || null)}
@@ -262,7 +278,7 @@ function PlayersSection({
                   )}
                 </td>
                 <td className="px-4 py-2">
-                  {gameStatus === 'setup' ? (
+                  {missionEditable ? (
                     <select
                       value={p.missionId ?? ''}
                       onChange={(e) => onAssignMission(p.id, e.target.value || null)}
@@ -282,8 +298,28 @@ function PlayersSection({
                   )}
                 </td>
                 <td className="px-4 py-2">{p.score}</td>
+                <td className="px-4 py-2">
+                  {p.status === 'alive' ? (
+                    <button
+                      type="button"
+                      onClick={() => onKillPlayer(p.id)}
+                      className="rounded-md bg-red-900 px-3 py-1.5 text-sm font-medium text-red-200"
+                    >
+                      Tuer
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onRevivePlayer(p.id)}
+                      className="rounded-md bg-green-900 px-3 py-1.5 text-sm font-medium text-green-200"
+                    >
+                      Ressusciter
+                    </button>
+                  )}
+                </td>
               </tr>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -297,12 +333,14 @@ function MissionsSection({
   onAddMission,
   onUpdateMission,
   onDeleteMission,
+  onRepairMissions,
 }: {
   missions: Mission[]
   playersById: Map<string, Player>
   onAddMission: (text: string) => void
   onUpdateMission: (missionId: string, text: string) => void
   onDeleteMission: (missionId: string) => void
+  onRepairMissions: () => void
 }) {
   const [text, setText] = useState('')
 
@@ -315,7 +353,16 @@ function MissionsSection({
 
   return (
     <section className="space-y-3">
-      <h2 className="text-lg font-medium">Missions ({missions.length})</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-medium">Missions ({missions.length})</h2>
+        <button
+          type="button"
+          onClick={onRepairMissions}
+          className="text-sm text-slate-400 hover:text-slate-200"
+        >
+          Réparer les missions bloquées
+        </button>
+      </div>
       <form onSubmit={handleSubmit} className="flex gap-2">
         <input
           value={text}
