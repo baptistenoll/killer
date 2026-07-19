@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    match /admins/{uid} {
+      // membership is managed manually (Firebase console / admin SDK), never from the client
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /games/{gameId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+
+      match /players/{playerId} {
+        allow read: if isSignedIn();
+        allow create, delete: if isAdmin();
+        // admin can change anything; an unbound player can bind themselves on first PIN login
+        allow update: if isAdmin() || (
+          isSignedIn() &&
+          resource.data.boundUid == null &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['boundUid'])
+        );
+      }
+
+      match /missions/{missionId} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin();
+      }
+
+      match /killClaims/{claimId} {
+        allow read: if isSignedIn();
+        // a player may only file a claim as themselves
+        allow create: if isSignedIn() &&
+          get(/databases/$(database)/documents/games/$(gameId)/players/$(request.resource.data.killerId)).data.boundUid == request.auth.uid;
+        allow update, delete: if isAdmin();
+      }
+    }
+  }
+}

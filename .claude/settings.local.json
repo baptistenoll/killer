@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm -v)",
+      "Bash(npm create *)",
+      "Bash(mv tmp-scaffold/.oxlintrc.json .)",
+      "Bash(rmdir tmp-scaffold *)",
+      "Bash(npm install *)",
+      "Bash(npx tailwindcss *)",
+      "Bash(npm uninstall *)",
+      "Bash(npm run *)",
+      "Skill(run)",
+      "Bash(curl -sf http://localhost:5173)",
+      "Bash(break)",
+      "Read(//private/tmp/**)",
+      "Bash(npm ls *)",
+      "Bash(node -e \"require.resolve\\('playwright'\\)\")",
+      "Read(//Users/baptistenoll/Library/Caches/**)",
+      "Bash(npm init *)",
+      "Bash(npx playwright *)",
+      "Bash(node check.mjs)",
+      "Bash(pkill -f \"vite\")",
+      "Bash(npx firebase-tools *)"
+    ]
+  }
+}
